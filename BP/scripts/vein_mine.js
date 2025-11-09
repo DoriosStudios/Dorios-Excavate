@@ -57,6 +57,11 @@ function breakBlock(player, item, block) {
 
     // ───── Default behavior ─────
     dim.runCommand(`fill ${x} ${y} ${z} ${x} ${y} ${z} air destroy`)
+    // let resutl = player.runCommand(`loot give @s mine ${x} ${y} ${z} mainhand`)
+    // world.sendMessage(`${JSON.stringify(resutl.successCount)}`)
+    // if (resutl.successCount > 0) {
+    //     block.dimension.runCommand(`fill ${x} ${y} ${z} ${x} ${y} ${z} air`);
+    // }
 }
 
 
@@ -84,7 +89,226 @@ function reduceHunger(player, minusHunger = 1, minusSaturation = 1) {
 }
 
 
+const dirs = [
+    // Cardinal directions (6)
+    { x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 },
+    { x: 0, y: 1, z: 0 }, { x: 0, y: -1, z: 0 },
+    { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 },
+
+    // Edge diagonals (12)
+    { x: 1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 },
+    { x: -1, y: 1, z: 0 }, { x: -1, y: -1, z: 0 },
+    { x: 1, y: 0, z: 1 }, { x: 1, y: 0, z: -1 },
+    { x: -1, y: 0, z: 1 }, { x: -1, y: 0, z: -1 },
+    { x: 0, y: 1, z: 1 }, { x: 0, y: 1, z: -1 },
+    { x: 0, y: -1, z: 1 }, { x: 0, y: -1, z: -1 },
+
+    // Corner diagonals (8)
+    { x: 1, y: 1, z: 1 }, { x: 1, y: 1, z: -1 },
+    { x: 1, y: -1, z: 1 }, { x: 1, y: -1, z: -1 },
+    { x: -1, y: 1, z: 1 }, { x: -1, y: 1, z: -1 },
+    { x: -1, y: -1, z: 1 }, { x: -1, y: -1, z: -1 }
+];
+
+export const shapeNames = {
+    default: "Shapeless",
+    shapelessVein: "Shapeless",
+    treeCapitator: "Tree Capitator",
+    veinMiner: "Vein Miner",
+    largeTunnel: "Tunnel 3x3",
+    smallTunnel: "Tunnel 1x2",
+    lineTunnel: "Tunnel 1x1"
+};
+
+
 export const veinHandler = {
+    /**
+     * Vein miner shapeless (floodfill de bloques).
+     */
+    'shapelessVein': async function (player, block, brokenBlock, maxVein = 64, item) {
+
+        const visited = new Set();
+        const toCheck = [block.location];
+        const dim = world.getDimension(player.dimension.id);
+
+        let cont = 0;
+
+        while (toCheck.length > 0 && cont < maxVein) {
+
+            if (item) {
+                const currentMainhand = player.getComponent("equippable").getEquipment("Mainhand");
+
+                if (currentMainhand?.typeId != item.typeId) {
+                    break;
+                }
+            }
+
+            const pos = toCheck.shift();
+            const key = `${pos.x},${pos.y},${pos.z}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+
+            let targetBlock;
+            try { targetBlock = dim.getBlock(pos); } catch { }
+
+            if (visited.size === 1 || (targetBlock && targetBlock.typeId == brokenBlock)) {
+                if (player.getGameMode().toLowerCase() == 'survival' && item?.durability.isValidComponent()) {
+                    if (item.durability.damage()) {
+                        player.getComponent('equippable').setEquipment('Mainhand', item)
+                    } else {
+                        player.getComponent('equippable').setEquipment('Mainhand',)
+                        player.playSound('random.break')
+                    }
+                }
+                if (cont % 10 == 0 && cont != 0) {
+                    if (!reduceHunger(player)) {
+                        player.addEffect('nausea', 200, { showParticles: false })
+                        break;
+                    }
+                }
+                cont++;
+
+                if (targetBlock) {
+
+                    breakBlock(player, item, targetBlock)
+                    await system.waitTicks(1);
+                }
+
+                for (const d of dirs) {
+                    toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z });
+                }
+            }
+        }
+    },
+    /**
+     * Tree Capitator: floodfill tipo shapeless, pero sólo para bloques de árbol.
+     * Rompe bloques que terminen en _log, _leaves, _stem y _wart_block.
+     */
+    'treeCapitator': async function (player, block, brokenBlock, maxVein = 128, item) {
+
+        const visited = new Set();
+        const toCheck = [block.location];
+        const dim = world.getDimension(player.dimension.id);
+
+        const patterns = ['_log', '_leaves', '_stem', '_wart_block'];
+
+        function isTreeBlock(typeId) {
+            return patterns.some(p => typeId.endsWith(p));
+        }
+
+        let cont = 0;
+
+        while (toCheck.length > 0 && cont < maxVein) {
+
+            if (item) {
+                const currentMainhand = player.getComponent("equippable").getEquipment("Mainhand");
+
+                if (currentMainhand?.typeId != item.typeId) {
+                    break;
+                }
+            }
+
+            const pos = toCheck.shift();
+            const key = `${pos.x},${pos.y},${pos.z}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+
+            let targetBlock;
+            try { targetBlock = dim.getBlock(pos); } catch { }
+
+            // MISMA LÓGICA QUE shapelessVein:
+            // primer bloque siempre, después sólo si cumple condición
+            if (visited.size === 1 || (targetBlock && isTreeBlock(targetBlock.typeId))) {
+                if (player.getGameMode().toLowerCase() == 'survival' && item?.durability.isValidComponent()) {
+                    if (item.durability.damage()) {
+                        player.getComponent('equippable').setEquipment('Mainhand', item)
+                    } else {
+                        player.getComponent('equippable').setEquipment('Mainhand',)
+                        player.playSound('random.break')
+                    }
+                }
+                if (cont % 10 == 0 && cont != 0) {
+                    if (!reduceHunger(player)) {
+                        player.addEffect('nausea', 200, { showParticles: false })
+                        break;
+                    }
+                }
+                cont++;
+
+                if (targetBlock) {
+                    breakBlock(player, item, targetBlock)
+                    await system.waitTicks(1);
+                }
+
+                // MISMO uso de dirs que shapeless
+                for (const d of dirs) {
+                    toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z });
+                }
+            }
+        }
+    },
+    /**
+     * Vein miner de minerales: floodfill tipo shapeless,
+     * pero sólo para bloques _ore y ancient_debris.
+     */
+    'veinMiner': async function (player, block, brokenBlock, maxVein = 64, item) {
+
+        const visited = new Set();
+        const toCheck = [block.location];
+        const dim = world.getDimension(player.dimension.id);
+
+        function isOreBlock(typeId) {
+            return typeId.endsWith('_ore') || typeId === 'minecraft:ancient_debris';
+        }
+
+        let cont = 0;
+
+        while (toCheck.length > 0 && cont < maxVein) {
+
+            if (item) {
+                const currentMainhand = player.getComponent("equippable").getEquipment("Mainhand");
+
+                if (currentMainhand?.typeId != item.typeId) {
+                    break;
+                }
+            }
+
+            const pos = toCheck.shift();
+            const key = `${pos.x},${pos.y},${pos.z}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+
+            let targetBlock;
+            try { targetBlock = dim.getBlock(pos); } catch { }
+
+            if (visited.size === 1 || (targetBlock && isOreBlock(targetBlock.typeId))) {
+                if (player.getGameMode().toLowerCase() == 'survival' && item?.durability.isValidComponent()) {
+                    if (item.durability.damage()) {
+                        player.getComponent('equippable').setEquipment('Mainhand', item)
+                    } else {
+                        player.getComponent('equippable').setEquipment('Mainhand',)
+                        player.playSound('random.break')
+                    }
+                }
+                if (cont % 10 == 0 && cont != 0) {
+                    if (!reduceHunger(player)) {
+                        player.addEffect('nausea', 200, { showParticles: false })
+                        break;
+                    }
+                }
+                cont++;
+
+                if (targetBlock) {
+                    breakBlock(player, item, targetBlock)
+                    await system.waitTicks(1);
+                }
+
+                for (const d of dirs) {
+                    toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z });
+                }
+            }
+        }
+    },
     /**
      * Gran túnel en forma de espiral 3x3 hacia adelante.
      */
@@ -225,92 +449,9 @@ export const veinHandler = {
             outward = !outward;
         }
     },
-
     /**
-     * Vein miner shapeless (floodfill de bloques).
+     * Pequeño túnel 1x2 hacia adelante.
      */
-    'shapelessVein': async function (player, block, brokenBlock, maxVein = 64, item) {
-
-        const visited = new Set();
-        const toCheck = [block.location];
-        const dim = world.getDimension(player.dimension.id);
-
-        let cont = 0;
-
-        while (toCheck.length > 0 && cont < maxVein) {
-
-            if (item) {
-                const currentMainhand = player.getComponent("equippable").getEquipment("Mainhand");
-
-                if (currentMainhand?.typeId != item.typeId) {
-                    break;
-                }
-            }
-
-            const pos = toCheck.shift();
-            const key = `${pos.x},${pos.y},${pos.z}`;
-            if (visited.has(key)) continue;
-            visited.add(key);
-
-            let targetBlock;
-            try { targetBlock = dim.getBlock(pos); } catch { }
-
-            if (visited.size === 1 || (targetBlock && targetBlock.typeId == brokenBlock)) {
-                if (player.getGameMode().toLowerCase() == 'survival' && item?.durability.isValidComponent()) {
-                    if (item.durability.damage()) {
-                        player.getComponent('equippable').setEquipment('Mainhand', item)
-                    } else {
-                        player.getComponent('equippable').setEquipment('Mainhand',)
-                        player.playSound('random.break')
-                    }
-                }
-                if (cont % 10 == 0 && cont != 0) {
-                    if (!reduceHunger(player)) {
-                        player.addEffect('nausea', 200, { showParticles: false })
-                        break;
-                    }
-                }
-                cont++;
-
-                if (targetBlock) {
-                    // let resutl = player.runCommand(`loot spawn ~ ~ ~ mine ${pos.x} ${pos.y} ${pos.z} mainhand`)
-                    // if (resutl.successCount > 0) {
-                    //     targetBlock.dimension.runCommand(`fill ${pos.x} ${pos.y} ${pos.z} ${pos.x} ${pos.y} ${pos.z} air`);
-                    // }
-                    breakBlock(player, item, targetBlock)
-                    await system.waitTicks(1);
-                }
-
-                const dirs = [
-                    // Cardinal directions (6)
-                    { x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 },
-                    { x: 0, y: 1, z: 0 }, { x: 0, y: -1, z: 0 },
-                    { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 },
-
-                    // Edge diagonals (12)
-                    { x: 1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 },
-                    { x: -1, y: 1, z: 0 }, { x: -1, y: -1, z: 0 },
-                    { x: 1, y: 0, z: 1 }, { x: 1, y: 0, z: -1 },
-                    { x: -1, y: 0, z: 1 }, { x: -1, y: 0, z: -1 },
-                    { x: 0, y: 1, z: 1 }, { x: 0, y: 1, z: -1 },
-                    { x: 0, y: -1, z: 1 }, { x: 0, y: -1, z: -1 },
-
-                    // Corner diagonals (8)
-                    { x: 1, y: 1, z: 1 }, { x: 1, y: 1, z: -1 },
-                    { x: 1, y: -1, z: 1 }, { x: 1, y: -1, z: -1 },
-                    { x: -1, y: 1, z: 1 }, { x: -1, y: 1, z: -1 },
-                    { x: -1, y: -1, z: 1 }, { x: -1, y: -1, z: -1 }
-                ];
-
-                for (const d of dirs) {
-                    toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z });
-                }
-            }
-        }
-    },
-    /**
- * Pequeño túnel 1x2 hacia adelante.
- */
     'smallTunnel': async function (player, brokenBlock, brokenBlockPerm, maxVein = 64, item) {
         const maxLength = Math.floor(maxVein / 2); // shorter than large
         const matchType = true;

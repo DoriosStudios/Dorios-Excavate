@@ -1,6 +1,6 @@
 import { world, system, ItemStack } from '@minecraft/server'
 import { ActionFormData, ModalFormData } from '@minecraft/server-ui'
-import { veinHandler } from 'vein_mine.js'
+import { veinHandler, shapeNames } from 'vein_mine.js'
 import { list, blacklist, maxLimit, setMaxLimit } from 'global_variables.js'
 
 function playerMessage(player, text) {
@@ -8,6 +8,8 @@ function playerMessage(player, text) {
         player.onScreenDisplay.setActionBar({ translate: text })
     })
 }
+
+// Mapa de nombres bonitos para las shapes
 
 export function configMenu(player) {
     const veinShape = player.getDynamicProperty("dorios:veinShape") ?? "Default";
@@ -20,7 +22,7 @@ export function configMenu(player) {
         .title('Excavate Configuration')
         .button('Add Block', "textures/ui/realms_slot_check")
         .button('Remove Block', "textures/ui/realms_red_x")
-        .button(`Shape Mode\n§8Current: §e${formattedShape}`, "textures/ui/world_glyph")
+        .button(`Shape Mode\n§8Current: §e${shapeNames[veinShape]}`, "textures/ui/world_glyph")
         .button(`Block Limit\n§8Personal: §e${playerLimit} §8/ Global: §b${globalLimit}`, "textures/ui/icon_setting");
 
     const enabled = player.getDynamicProperty('dorios:veinEnabled');
@@ -69,7 +71,7 @@ export function configMenu(player) {
 
             case 2:
                 let shapes = new ActionFormData().title('Vein Shapes');
-                Object.keys(veinHandler).forEach(name => shapes.button(`${name}`));
+                Object.keys(veinHandler).forEach(name => shapes.button(`${shapeNames[name]}`));
 
                 shapes.show(player).then(({ canceled, selection }) => {
                     if (canceled) return;
@@ -296,4 +298,4 @@ world.beforeEvents.playerBreakBlock.subscribe(e => {
         player.setDynamicProperty('dorios:isDefaultAdding', false)
         return;
     }
-})
+})    

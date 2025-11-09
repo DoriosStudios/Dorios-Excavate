@@ -1,6 +1,6 @@
 import { world, system, CommandPermissionLevel, CustomCommandParamType, CustomCommandStatus } from "@minecraft/server"
 import { configMenu } from 'vein_menu.js'
-import { veinHandler } from 'vein_mine.js'
+import { veinHandler, shapeNames } from 'vein_mine.js'
 import { list, blacklist, maxLimit, setMaxLimit } from 'global_variables.js'
 
 function playerMessage(player, text) {
@@ -32,6 +32,12 @@ const typeMap = {
     entityType: CustomCommandParamType.EntityType,
     player: CustomCommandParamType.PlayerSelector,
 }
+
+
+let shapeKeys = []
+Object.keys(veinHandler).forEach(name => {
+    shapeKeys.push(shapeNames[name])
+})
 
 const commands = [
     {
@@ -274,7 +280,7 @@ const commands = [
             {
                 name: "shape",
                 type: "enum",
-                enum: Object.keys(veinHandler)
+                enum: shapeKeys
             }
         ],
         callback(origin, shape) {
