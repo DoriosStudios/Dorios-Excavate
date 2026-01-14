@@ -4,7 +4,15 @@
 		"product_type": "addon",
 		"authors": [
 			"Dorios Studios"
-		]
+		],
+		"generated_with": {
+			"bridge": [
+				"2.7.54"
+			],
+			"dash": [
+				"0.11.7"
+			]
+		}
 	},
 	"header": {
 		"name": "Dorios' Excavate",
@@ -46,7 +54,7 @@
 	"dependencies": [
 		{
 			"module_name": "@minecraft/server",
-			"version": "2.1.0"
+			"version": "2.4.0"
 		},
 		{
 			"module_name": "@minecraft/server-ui",
