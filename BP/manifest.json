@@ -4,19 +4,11 @@
 		"product_type": "addon",
 		"authors": [
 			"Dorios Studios"
-		],
-		"generated_with": {
-			"bridge": [
-				"2.7.54"
-			],
-			"dash": [
-				"0.11.7"
-			]
-		}
+		]
 	},
 	"header": {
 		"name": "Dorios' Excavate",
-		"description": "v1.0.3 - Dorios Studios",
+		"description": "v1.1.0 - Dorios Studios",
 		"min_engine_version": [
 			1,
 			21,
@@ -25,7 +17,7 @@
 		"uuid": "1d270d44-b64f-4d43-8149-63a9fc128155",
 		"version": [
 			1,
-			0,
+			1,
 			0
 		]
 	},
