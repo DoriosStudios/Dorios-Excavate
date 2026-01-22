@@ -235,8 +235,8 @@ export const veinHandler = {
 
                     if (targetBlock) {
                         breakBlock(player, item, targetBlock, ctx)
-                        await system.waitTicks(1)
                     }
+                    if (cont % 32 == 0) await system.waitTicks(1)
 
                     for (const d of dirs) {
                         toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z })
@@ -307,8 +307,8 @@ export const veinHandler = {
 
                     if (targetBlock) {
                         breakBlock(player, item, targetBlock, ctx)
-                        await system.waitTicks(1)
                     }
+                    if (cont % 32 == 0) await system.waitTicks(1)
 
                     // MISMO uso de dirs que shapeless
                     for (const d of dirs) {
@@ -376,8 +376,8 @@ export const veinHandler = {
 
                     if (targetBlock) {
                         breakBlock(player, item, targetBlock, ctx)
-                        await system.waitTicks(1)
                     }
+                    if (cont % 32 == 0) await system.waitTicks(1)
 
                     for (const d of dirs) {
                         toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z })
@@ -514,8 +514,8 @@ export const veinHandler = {
                     broken++
                     foundInSlice = true
                     if (broken + 1 >= maxBlocks) return
-                    await system.waitTicks(1)
                 }
+                if (d % 32 == 0) await system.waitTicks(1)
 
                 if (!foundInSlice) break
                 outward = !outward
@@ -619,9 +619,8 @@ export const veinHandler = {
                         console.warn(`[VeinSmallTunnel] Error en ${x},${y},${z}:`, e)
                         return
                     }
-
-                    await system.waitTicks(1)
                 }
+                if (d % 32 == 0) await system.waitTicks(1)
             }
         } finally {
             dropVeinLoot(ctx)
@@ -712,7 +711,7 @@ export const veinHandler = {
                     return
                 }
 
-                await system.waitTicks(1)
+                if (d % 32 == 0) await system.waitTicks(1)
             }
         } finally {
             dropVeinLoot(ctx)
