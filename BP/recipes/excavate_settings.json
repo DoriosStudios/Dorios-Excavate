@@ -1,0 +1,22 @@
+{
+	"format_version": "1.12",
+	"minecraft:recipe_shapeless": {
+		"description": {
+			"identifier": "dorios:excavate_settings"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"ingredients": [
+			{
+				"item": "wooden_pickaxe"
+			},
+			{
+				"item": "paper"
+			}
+		],
+		"result": {
+			"item": "dorios:settings_item"
+		}
+	}
+}

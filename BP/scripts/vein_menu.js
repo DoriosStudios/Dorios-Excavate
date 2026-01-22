@@ -9,6 +9,21 @@ function playerMessage(player, text) {
     })
 }
 
+system.beforeEvents.startup.subscribe(e => {
+    e.itemComponentRegistry.registerCustomComponent('dorios:excavate_settings', {
+        onUse(e) {
+            configMenu(e.source)
+        }
+    })
+})
+
+world.afterEvents.playerSpawn.subscribe(e => {
+    const { initialSpawn, player } = e
+    if (!initialSpawn) return
+    if (player.hasTag("dorios:spawned")) return
+    player.addTag("dorios:spawned")
+    player.getComponent('inventory').container.addItem(new ItemStack("dorios:settings_item"))
+})
 // Mapa de nombres bonitos para las shapes
 
 export function configMenu(player) {
