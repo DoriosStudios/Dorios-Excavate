@@ -273,6 +273,45 @@ const commands = [
         }
     },
     {
+        name: "excavateconnect",
+        description: "Toggles Vein Connect (connected listed blocks) on or off.",
+        permissionLevel: "any",
+        parameters: [],
+        callback(origin) {
+            const player = origin.sourceEntity
+
+            if (!player) return;
+
+            let current = player.getDynamicProperty('dorios:veinConnect')
+            if (current === undefined) {
+                current = world.getDynamicProperty('dorios:veinConnectDefault') ?? false
+            }
+
+            const next = !current
+            player.setDynamicProperty('dorios:veinConnect', next)
+            playerMessage(player, `§eVein Connect: ${next ? '§aEnabled' : '§cDisabled'}`)
+        }
+    },
+    {
+        name: "excavateconnectdefault",
+        description: "Sets the global default value for Vein Connect. (Admin only)",
+        permissionLevel: "admin",
+        parameters: [
+            {
+                name: "enabled",
+                type: "bool"
+            }
+        ],
+        callback(origin, enabled) {
+            const player = origin.sourceEntity
+
+            if (!player) return;
+
+            world.setDynamicProperty('dorios:veinConnectDefault', !!enabled)
+            playerMessage(player, `§eDefault Vein Connect: ${enabled ? '§aEnabled' : '§cDisabled'}`)
+        }
+    },
+    {
         name: "excavateshape",
         description: "Changes your current excavate shape or pattern.",
         permissionLevel: "any",

@@ -39,6 +39,21 @@ const DurabilityHandler = {
         if (world.getDynamicProperty('dorios:noConsumeDurability')) return true
         if (!this.item || !this.item.getComponent("durability")) return false;
 
+        const worldAmount = Number(world.getDynamicProperty('dorios:durabilityCost'))
+        const worldChance = Number(world.getDynamicProperty('dorios:durabilityChance'))
+
+        if (arguments.length < 1 && Number.isFinite(worldAmount)) {
+            amount = Math.max(0, Math.floor(worldAmount))
+        }
+
+        if (arguments.length < 2 && Number.isFinite(worldChance)) {
+            chance = Math.min(Math.max(worldChance, 0), 1)
+        }
+
+        if (amount <= 0 || chance <= 0) {
+            return true
+        }
+
         const durability = this.item.getComponent("durability");
         let unbreaking = 0;
 

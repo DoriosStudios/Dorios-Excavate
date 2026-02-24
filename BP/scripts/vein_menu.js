@@ -9,6 +9,35 @@ function playerMessage(player, text) {
     })
 }
 
+function clampNumber(value, min, max, integer = false) {
+    if (!Number.isFinite(value)) return null
+
+    const parsed = integer ? Math.floor(value) : value
+    return Math.min(Math.max(parsed, min), max)
+}
+
+function getWorldBoolean(propertyId, fallback = false) {
+    const value = world.getDynamicProperty(propertyId)
+    return typeof value === 'boolean' ? value : fallback
+}
+
+function getWorldNumber(propertyId, fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY, integer = false) {
+    const raw = Number(world.getDynamicProperty(propertyId))
+    const source = Number.isFinite(raw) ? raw : fallback
+    return clampNumber(source, min, max, integer)
+}
+
+function getPlayerVeinConnect(player) {
+    let value = player.getDynamicProperty('dorios:veinConnect')
+
+    if (value === undefined) {
+        value = getWorldBoolean('dorios:veinConnectDefault', false)
+        player.setDynamicProperty('dorios:veinConnect', value)
+    }
+
+    return !!value
+}
+
 system.beforeEvents.startup.subscribe(e => {
     e.itemComponentRegistry.registerCustomComponent('dorios:excavate_settings', {
         onUse(e) {
@@ -28,10 +57,9 @@ world.afterEvents.playerSpawn.subscribe(e => {
 
 export function configMenu(player) {
     const veinShape = player.getDynamicProperty("dorios:veinShape") ?? "Default";
-    const formattedShape = veinShape.charAt(0).toUpperCase() + veinShape.slice(1);
-
-    const playerLimit = player.getDynamicProperty("dorios:veinLimit") ?? 16;
-    const globalLimit = world.getDynamicProperty("dorios:maxVeinLimit") ?? 64;
+    const playerLimit = player.getDynamicProperty("dorios:veinLimit") ?? 64;
+    const globalLimit = getWorldNumber("dorios:maxLimit", maxLimit, 1, 4096, true);
+    const currentVeinConnect = getPlayerVeinConnect(player);
 
     const menu = new ActionFormData()
         .title('Excavate Configuration')
@@ -45,7 +73,11 @@ export function configMenu(player) {
     const toggleIcon = enabled ? "textures/ui/toggle_on" : "textures/ui/toggle_off";
     menu.button(toggleLabel, toggleIcon);
 
-    const baseButtons = 5;
+    const connectLabel = currentVeinConnect ? "Vein Connect\n§a[ON]" : "Vein Connect\n§c[OFF]";
+    const connectIcon = currentVeinConnect ? "textures/ui/online" : "textures/ui/Ping_Offline_Red_Dark";
+    menu.button(connectLabel, connectIcon);
+
+    const baseButtons = 6;
 
     if (player.playerPermissionLevel == 2) {
         menu.button('Admin Settings', "textures/ui/icon_setting");
@@ -98,14 +130,14 @@ export function configMenu(player) {
                 break;
 
             case 3:
-                const currentLimit = player.getDynamicProperty("dorios:veinLimit") ?? 16;
+                const currentLimit = player.getDynamicProperty("dorios:veinLimit") ?? 64;
                 new ModalFormData()
                     .title('Vein Limit')
                     .label(`Current: ${currentLimit}`)
-                    .slider('Limit', 1, maxLimit, { defaultValue: currentLimit })
+                    .slider('Limit', 1, globalLimit, { defaultValue: Math.min(currentLimit, globalLimit) })
                     .show(player).then(({ canceled, formValues }) => {
                         if (canceled) return;
-                        const quantity = formValues[1];
+                        const quantity = Math.floor(formValues[1]);
                         player.setDynamicProperty('dorios:veinLimit', quantity);
                         playerMessage(player, `§aLimit set to §e${quantity}`);
                         configMenu(player); // refresca menú
@@ -118,6 +150,15 @@ export function configMenu(player) {
                 playerMessage(player, isEnabled ? "§eExcavate §cDisabled" : "§eExcavate §aEnabled");
                 configMenu(player); // refresca
                 break;
+
+            case 5: {
+                const currentConnect = getPlayerVeinConnect(player);
+                const nextConnect = !currentConnect;
+                player.setDynamicProperty('dorios:veinConnect', nextConnect);
+                playerMessage(player, `§eVein Connect: ${nextConnect ? "§aEnabled" : "§cDisabled"}`);
+                configMenu(player);
+                break;
+            }
 
             case baseButtons:
                 adminMenu(player);
@@ -133,7 +174,15 @@ function adminMenu(player) {
     // === Valores actuales (inversos) ===
     const noConsumeDurability = world.getDynamicProperty("dorios:noConsumeDurability") ?? false;
     const noConsumeSaturation = world.getDynamicProperty("dorios:noConsumeSaturation") ?? false;
-    const globalLimit = world.getDynamicProperty("dorios:maxVeinLimit") ?? 64;
+    const globalLimit = getWorldNumber("dorios:maxLimit", maxLimit, 1, 4096, true);
+    const defaultVeinConnect = getWorldBoolean("dorios:veinConnectDefault", false);
+    const durabilityCost = getWorldNumber("dorios:durabilityCost", 1, 0, 32, true);
+    const durabilityChance = getWorldNumber("dorios:durabilityChance", 1, 0, 1, false);
+    const consumeInterval = getWorldNumber("dorios:consumeInterval", 10, 1, 1024, true);
+    const hungerCost = getWorldNumber("dorios:hungerCost", 1, 0, 20, true);
+    const saturationCost = getWorldNumber("dorios:saturationCost", 1, 0, 20, true);
+    const breakDelayEvery = getWorldNumber("dorios:breakDelayEvery", 32, 1, 1024, true);
+    const breakDelayTicks = getWorldNumber("dorios:breakDelayTicks", 1, 0, 20, true);
 
     // === Construcción del menú ===
     const adminMenuForm = new ActionFormData()
@@ -145,6 +194,11 @@ function adminMenu(player) {
         .button('Remove from Default List', "textures/ui/realms_red_x")
         .button(`Consume Durability\n${!noConsumeDurability ? "§a[ON]" : "§c[OFF]"}`, "textures/ui/anvil_icon")
         .button(`Consume Saturation\n${!noConsumeSaturation ? "§a[ON]" : "§c[OFF]"}`, "textures/ui/hunger_full")
+        .button(`Default Vein Connect\n${defaultVeinConnect ? "§a[ON]" : "§c[OFF]"}`, "textures/ui/multiplayer_glyph_color")
+        .button(
+            `Advanced Mining Settings\n§8Durability: §e${durabilityCost} @ ${(durabilityChance * 100).toFixed(0)}%\n§8Food: §e${hungerCost}/${saturationCost} §8every §e${consumeInterval}\n§8Delay: §e${breakDelayTicks}t §8every §e${breakDelayEvery}`,
+            "textures/ui/gear"
+        )
         .button('§8Back', "textures/ui/arrow_left");
 
     // === Mostrar el formulario ===
@@ -161,12 +215,14 @@ function adminMenu(player) {
                     .show(player).then(({ canceled, formValues }) => {
                         if (canceled) return;
 
-                        const quantity = Number(formValues[1]);
-                        if (isNaN(quantity)) {
+                        const quantity = clampNumber(Number(formValues[1]), 1, 4096, true);
+                        if (quantity === null) {
                             playerMessage(player, '§cNumber not valid');
                             return;
                         }
 
+                        setMaxLimit(quantity);
+                        world.setDynamicProperty('dorios:maxLimit', quantity);
                         world.setDynamicProperty('dorios:maxVeinLimit', quantity);
                         playerMessage(player, `§aGlobal Limit set to §e${quantity}`);
                         adminMenu(player); // refrescar
@@ -237,8 +293,64 @@ function adminMenu(player) {
                 break;
             }
 
-            // ===== Back =====
+            // ===== Default Vein Connect =====
             case 7:
+                world.setDynamicProperty("dorios:veinConnectDefault", !defaultVeinConnect);
+                playerMessage(player, `§eDefault Vein Connect: ${!defaultVeinConnect ? "§aEnabled" : "§cDisabled"}`);
+                adminMenu(player);
+                break;
+
+            // ===== Advanced Mining Settings =====
+            case 8:
+                new ModalFormData()
+                    .title('Advanced Mining Settings')
+                    .label('Use numeric values only. Default profile keeps current addon behavior.')
+                    .textField('Durability Cost Per Block (0-32)', `${durabilityCost}`)
+                    .textField('Durability Chance (0.0 - 1.0)', `${durabilityChance}`)
+                    .textField('Food Consume Interval in Blocks (1-1024)', `${consumeInterval}`)
+                    .textField('Hunger Cost (0-20)', `${hungerCost}`)
+                    .textField('Saturation Cost (0-20)', `${saturationCost}`)
+                    .textField('Break Delay Every N Blocks (1-1024)', `${breakDelayEvery}`)
+                    .textField('Break Delay Ticks (0-20)', `${breakDelayTicks}`)
+                    .show(player).then(({ canceled, formValues }) => {
+                        if (canceled) return;
+
+                        const nextDurabilityCost = clampNumber(Number(formValues[1]), 0, 32, true);
+                        const nextDurabilityChance = clampNumber(Number(formValues[2]), 0, 1, false);
+                        const nextConsumeInterval = clampNumber(Number(formValues[3]), 1, 1024, true);
+                        const nextHungerCost = clampNumber(Number(formValues[4]), 0, 20, true);
+                        const nextSaturationCost = clampNumber(Number(formValues[5]), 0, 20, true);
+                        const nextBreakDelayEvery = clampNumber(Number(formValues[6]), 1, 1024, true);
+                        const nextBreakDelayTicks = clampNumber(Number(formValues[7]), 0, 20, true);
+
+                        if (
+                            nextDurabilityCost === null ||
+                            nextDurabilityChance === null ||
+                            nextConsumeInterval === null ||
+                            nextHungerCost === null ||
+                            nextSaturationCost === null ||
+                            nextBreakDelayEvery === null ||
+                            nextBreakDelayTicks === null
+                        ) {
+                            playerMessage(player, '§cInvalid values detected. Use numbers only.');
+                            return;
+                        }
+
+                        world.setDynamicProperty('dorios:durabilityCost', nextDurabilityCost);
+                        world.setDynamicProperty('dorios:durabilityChance', nextDurabilityChance);
+                        world.setDynamicProperty('dorios:consumeInterval', nextConsumeInterval);
+                        world.setDynamicProperty('dorios:hungerCost', nextHungerCost);
+                        world.setDynamicProperty('dorios:saturationCost', nextSaturationCost);
+                        world.setDynamicProperty('dorios:breakDelayEvery', nextBreakDelayEvery);
+                        world.setDynamicProperty('dorios:breakDelayTicks', nextBreakDelayTicks);
+
+                        playerMessage(player, '§aAdvanced mining settings updated');
+                        adminMenu(player);
+                    });
+                break;
+
+            // ===== Back =====
+            case 9:
                 configMenu(player);
                 break;
         }

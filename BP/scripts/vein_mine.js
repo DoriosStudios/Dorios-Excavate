@@ -3,8 +3,67 @@ import { list, blacklist } from 'global_variables.js'
 import { is_diggable } from 'is_diggable.js'
 import { Player, ItemStack, Block } from '@minecraft/server'
 
+const DEFAULT_SETTINGS = {
+    consumeInterval: 10,
+    hungerCost: 1,
+    saturationCost: 1,
+    breakDelayEvery: 32,
+    breakDelayTicks: 1,
+    veinConnectDefault: false,
+}
+
 function msg(str) {
     world.sendMessage(`${JSON.stringify(str)}`)
+}
+
+function getNumberSetting(propertyId, fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY) {
+    const raw = world.getDynamicProperty(propertyId)
+    const value = Number(raw)
+
+    if (!Number.isFinite(value)) return fallback
+    return Math.min(Math.max(value, min), max)
+}
+
+function getBooleanSetting(propertyId, fallback = false) {
+    const raw = world.getDynamicProperty(propertyId)
+    return typeof raw === 'boolean' ? raw : fallback
+}
+
+function normalizeTypeId(typeId) {
+    if (!typeId) return typeId
+
+    return typeId
+        .replace('minecraft:lit_redstone_ore', 'minecraft:redstone_ore')
+        .replace('minecraft:lit_deepslate_redstone_ore', 'minecraft:deepslate_redstone_ore')
+}
+
+function shouldConsumeFoodAt(counter) {
+    const interval = getNumberSetting('dorios:consumeInterval', DEFAULT_SETTINGS.consumeInterval, 1, 1024)
+    return counter !== 0 && counter % interval === 0
+}
+
+function shouldDelayAt(counter) {
+    const interval = getNumberSetting('dorios:breakDelayEvery', DEFAULT_SETTINGS.breakDelayEvery, 1, 1024)
+    return counter !== 0 && counter % interval === 0
+}
+
+async function handleBreakDelay(counter) {
+    if (!shouldDelayAt(counter)) return
+
+    const ticks = getNumberSetting('dorios:breakDelayTicks', DEFAULT_SETTINGS.breakDelayTicks, 0, 20)
+    if (ticks > 0) {
+        await system.waitTicks(ticks)
+    }
+}
+
+function shouldBreakConnectedType(targetTypeId, brokenBlock, veinConnect, veinListSet) {
+    const normalizedTarget = normalizeTypeId(targetTypeId)
+    if (!normalizedTarget || blacklist.includes(normalizedTarget)) return false
+
+    if (normalizedTarget === brokenBlock) return true
+    if (!veinConnect || !veinListSet) return false
+
+    return veinListSet.has(normalizedTarget)
 }
 
 /* ───────────────────────────────────────────── */
@@ -131,6 +190,11 @@ function breakBlock(player, item, block, veinCtx = null) {
 function reduceHunger(player, minusHunger = 1, minusSaturation = 1) {
     if (world.getDynamicProperty('dorios:noConsumeSaturation')) return true
 
+    minusHunger = Math.floor(getNumberSetting('dorios:hungerCost', minusHunger, 0, 20))
+    minusSaturation = Math.floor(getNumberSetting('dorios:saturationCost', minusSaturation, 0, 20))
+
+    if (minusHunger <= 0 && minusSaturation <= 0) return true
+
     const hungerComponent = player.getComponent('minecraft:food') ?? player.getComponent('player.hunger')
     const saturationComponent = player.getComponent('player.saturation')
 
@@ -140,10 +204,10 @@ function reduceHunger(player, minusHunger = 1, minusSaturation = 1) {
     const currentSaturation = saturationComponent.currentValue
 
     // Prioriza gastar saturación antes que hambre
-    if (currentSaturation - minusSaturation >= 0) {
+    if (minusSaturation > 0 && currentSaturation - minusSaturation >= 0) {
         saturationComponent.setCurrentValue(currentSaturation - minusSaturation)
         return true
-    } else if (currentHunger - minusHunger >= 0) {
+    } else if (minusHunger > 0 && currentHunger - minusHunger >= 0) {
         hungerComponent.setCurrentValue(currentHunger - minusHunger)
         return true
     }
@@ -188,8 +252,10 @@ export const veinHandler = {
     /**
      * Vein miner shapeless (floodfill de bloques).
      */
-    'shapelessVein': async function (player, block, brokenBlock, maxVein = 64, item) {
+    'shapelessVein': async function (player, block, brokenBlock, maxVein = 64, item, options = {}) {
         const ctx = createVeinContext(block)
+        const veinConnect = !!options.veinConnect
+        const veinListSet = options.veinListSet instanceof Set ? options.veinListSet : null
 
         try {
             const visited = new Set()
@@ -216,7 +282,7 @@ export const veinHandler = {
                 let targetBlock
                 try { targetBlock = dim.getBlock(pos) } catch { }
 
-                if (visited.size === 1 || (targetBlock && targetBlock.typeId == brokenBlock)) {
+                if (visited.size === 1 || (targetBlock && shouldBreakConnectedType(targetBlock.typeId, brokenBlock, veinConnect, veinListSet))) {
                     if (player.getGameMode().toLowerCase() == 'survival' && item?.durability.isValidComponent()) {
                         if (item.durability.damage()) {
                             player.getComponent('equippable').setEquipment('Mainhand', item)
@@ -225,7 +291,7 @@ export const veinHandler = {
                             player.playSound('random.break')
                         }
                     }
-                    if (cont % 10 == 0 && cont != 0) {
+                    if (shouldConsumeFoodAt(cont)) {
                         if (!reduceHunger(player)) {
                             player.addEffect('nausea', 200, { showParticles: false })
                             break
@@ -236,7 +302,7 @@ export const veinHandler = {
                     if (targetBlock) {
                         breakBlock(player, item, targetBlock, ctx)
                     }
-                    if (cont % 32 == 0) await system.waitTicks(1)
+                    await handleBreakDelay(cont)
 
                     for (const d of dirs) {
                         toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z })
@@ -297,7 +363,7 @@ export const veinHandler = {
                             player.playSound('random.break')
                         }
                     }
-                    if (cont % 10 == 0 && cont != 0) {
+                    if (shouldConsumeFoodAt(cont)) {
                         if (!reduceHunger(player)) {
                             player.addEffect('nausea', 200, { showParticles: false })
                             break
@@ -308,7 +374,7 @@ export const veinHandler = {
                     if (targetBlock) {
                         breakBlock(player, item, targetBlock, ctx)
                     }
-                    if (cont % 32 == 0) await system.waitTicks(1)
+                    await handleBreakDelay(cont)
 
                     // MISMO uso de dirs que shapeless
                     for (const d of dirs) {
@@ -366,7 +432,7 @@ export const veinHandler = {
                             player.playSound('random.break')
                         }
                     }
-                    if (cont % 10 == 0 && cont != 0) {
+                    if (shouldConsumeFoodAt(cont)) {
                         if (!reduceHunger(player)) {
                             player.addEffect('nausea', 200, { showParticles: false })
                             break
@@ -377,7 +443,7 @@ export const veinHandler = {
                     if (targetBlock) {
                         breakBlock(player, item, targetBlock, ctx)
                     }
-                    if (cont % 32 == 0) await system.waitTicks(1)
+                    await handleBreakDelay(cont)
 
                     for (const d of dirs) {
                         toCheck.push({ x: pos.x + d.x, y: pos.y + d.y, z: pos.z + d.z })
@@ -496,7 +562,7 @@ export const veinHandler = {
                             player.playSound('random.break')
                         }
                     }
-                    if (cont % 10 == 0 && cont != 0) {
+                    if (shouldConsumeFoodAt(cont)) {
                         if (!reduceHunger(player)) {
                             player.addEffect('nausea', 200, { showParticles: false })
                             break
@@ -515,7 +581,7 @@ export const veinHandler = {
                     foundInSlice = true
                     if (broken + 1 >= maxBlocks) return
                 }
-                if (d % 32 == 0) await system.waitTicks(1)
+                await handleBreakDelay(d)
 
                 if (!foundInSlice) break
                 outward = !outward
@@ -605,7 +671,7 @@ export const veinHandler = {
                         }
                     }
 
-                    if (cont % 10 === 0 && cont !== 0) {
+                    if (shouldConsumeFoodAt(cont)) {
                         if (!reduceHunger(player)) {
                             player.addEffect('nausea', 200, { showParticles: false })
                             return
@@ -620,7 +686,7 @@ export const veinHandler = {
                         return
                     }
                 }
-                if (d % 32 == 0) await system.waitTicks(1)
+                await handleBreakDelay(d)
             }
         } finally {
             dropVeinLoot(ctx)
@@ -696,7 +762,7 @@ export const veinHandler = {
                     }
                 }
 
-                if (cont % 10 === 0 && cont !== 0) {
+                if (shouldConsumeFoodAt(cont)) {
                     if (!reduceHunger(player)) {
                         player.addEffect('nausea', 200, { showParticles: false })
                         break
@@ -711,7 +777,7 @@ export const veinHandler = {
                     return
                 }
 
-                if (d % 32 == 0) await system.waitTicks(1)
+                await handleBreakDelay(d)
             }
         } finally {
             dropVeinLoot(ctx)
@@ -730,6 +796,7 @@ world.afterEvents.playerBreakBlock.subscribe(async e => {
     let veinShape = player.getDynamicProperty('dorios:veinShape')
     let veinLimit = player.getDynamicProperty('dorios:veinLimit')
     let veinList = player.getDynamicProperty("dorios:veinList")
+    let veinConnect = player.getDynamicProperty('dorios:veinConnect')
 
     if (isEnabled == undefined) {
         player.setDynamicProperty('dorios:veinEnabled', true)
@@ -753,7 +820,13 @@ world.afterEvents.playerBreakBlock.subscribe(async e => {
         veinList = JSON.parse(veinList)
     }
 
-    let brokenBlock = brokenBlockPermutation.type.id
+    if (veinConnect == undefined) {
+        const defaultConnect = getBooleanSetting('dorios:veinConnectDefault', DEFAULT_SETTINGS.veinConnectDefault)
+        player.setDynamicProperty('dorios:veinConnect', defaultConnect)
+        veinConnect = defaultConnect
+    }
+
+    let brokenBlock = normalizeTypeId(brokenBlockPermutation.type.id)
 
     if (blacklist.includes(brokenBlock)) {
         veinList = veinList.filter(id => id !== brokenBlock)
@@ -761,19 +834,25 @@ world.afterEvents.playerBreakBlock.subscribe(async e => {
         return
     }
 
-    if (brokenBlock.includes('redstone_ore')) {
-        brokenBlock = brokenBlock.replace("lit_", "")
-    }
+    const normalizedVeinList = veinList.map(typeId => normalizeTypeId(typeId))
+    const veinListSet = new Set(normalizedVeinList)
 
     if (!isEnabled || !is_diggable(itemStackBeforeBreak, brokenBlockPermutation)) return
     if (player.getComponent('player.hunger').currentValue == 0) return
 
     let vein = veinHandler[veinShape]
 
+    if (typeof vein !== 'function') return
+
+    const veinOptions = {
+        veinConnect: !!veinConnect,
+        veinListSet,
+    }
+
     if (veinShape == "largeTunnel" || veinShape == "smallTunnel") {
-        vein(player, block, brokenBlock, veinLimit, itemStackBeforeBreak)
+        vein(player, block, brokenBlock, veinLimit, itemStackBeforeBreak, veinOptions)
     } else {
-        if (!veinList.includes(`${brokenBlock}`)) return
-        vein(player, block, brokenBlock, veinLimit, itemStackBeforeBreak)
+        if (!veinListSet.has(`${brokenBlock}`)) return
+        vein(player, block, brokenBlock, veinLimit, itemStackBeforeBreak, veinOptions)
     }
 })

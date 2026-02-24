@@ -4,6 +4,17 @@ let list = []
 let blacklist = []
 let maxLimit = 0
 
+const worldDefaults = {
+    'dorios:veinConnectDefault': false,
+    'dorios:durabilityCost': 1,
+    'dorios:durabilityChance': 1,
+    'dorios:consumeInterval': 10,
+    'dorios:hungerCost': 1,
+    'dorios:saturationCost': 1,
+    'dorios:breakDelayEvery': 32,
+    'dorios:breakDelayTicks': 1,
+}
+
 export function setMaxLimit(num) {
     maxLimit = num;
 }
@@ -73,11 +84,26 @@ world.afterEvents.worldLoad.subscribe(e => {
     }
 
     const existingMaxLimit = world.getDynamicProperty('dorios:maxLimit')
-    if (existingMaxLimit) {
+    const legacyMaxLimit = world.getDynamicProperty('dorios:maxVeinLimit')
+
+    if (typeof existingMaxLimit === 'number') {
         maxLimit = existingMaxLimit
+    } else if (typeof legacyMaxLimit === 'number') {
+        maxLimit = legacyMaxLimit
+        world.setDynamicProperty('dorios:maxLimit', maxLimit)
     } else {
         maxLimit = 128
         world.setDynamicProperty('dorios:maxLimit', maxLimit)
+    }
+
+    if (world.getDynamicProperty('dorios:maxVeinLimit') === undefined) {
+        world.setDynamicProperty('dorios:maxVeinLimit', maxLimit)
+    }
+
+    for (const [key, value] of Object.entries(worldDefaults)) {
+        if (world.getDynamicProperty(key) === undefined) {
+            world.setDynamicProperty(key, value)
+        }
     }
 })
 
