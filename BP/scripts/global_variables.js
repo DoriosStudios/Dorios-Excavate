@@ -45,6 +45,9 @@ world.afterEvents.worldLoad.subscribe(e => {
             'minecraft:quartz_ore',
             'minecraft:redstone_ore',
             'minecraft:ancient_debris',
+            'utilitycraft:deepslate_titanium_ore',
+            'utilitycraft:deepslate_aetherium_ore',
+            'utilitycraft:aetherium_ore',
             // Logs
             'minecraft:oak_log',
             'minecraft:spruce_log',
