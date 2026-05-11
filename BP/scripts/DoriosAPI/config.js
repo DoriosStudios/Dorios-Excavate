@@ -50,7 +50,14 @@ export const addonData = {
     name: "Dorios' Excavate",
     author: "Dorios Studios",
     identifier: "dorios_excavate",
-    version: "1.2.0"
+    version: "1.2.0",
+    optionalDependencies: {
+        "uc_ascendant_technology": {
+            name: "UtilityCraft: Ascendant Technology",
+            version: "0.8.0",
+            warning: "Update Ascendant Technology to keep Excavate bridge compatibility aligned with the latest custom drop handling."
+        }
+    }
 }
 
 /**
@@ -72,9 +79,84 @@ export const addonData = {
  * import './itemStackClass.js'; // Item stack handling
  * ```
  */
-import './API.js'
 import './dependencyChecker.js'
-import './modules/blockClass.js'
-import './modules/playerClass.js'
-import './modules/itemStackClass.js'
-import './modules/entityClass.js'
+
+import { world, system } from '@minecraft/server'
+import { dependenciesRegistry, compareDependencyVersion } from './dependencyChecker.js'
+
+const ascendantTechnologyID = 'uc_ascendant_technology'
+
+export let isAscendantTechnologyPresent = false
+export let ascendantTechnologyVersion = null
+
+export function getDependencyData(identifier) {
+    if (typeof identifier !== 'string' || identifier.length === 0) return null
+    return dependenciesRegistry.get(identifier) ?? null
+}
+
+export function isDependencyPresent(identifier) {
+    return Boolean(getDependencyData(identifier))
+}
+
+export function getOptionalDependencyConfig(identifier) {
+    if (typeof identifier !== 'string' || identifier.length === 0) return null
+    return addonData.optionalDependencies?.[identifier] ?? null
+}
+
+export function getOptionalDependencyData(identifier) {
+    if (!getOptionalDependencyConfig(identifier)) return null
+    return getDependencyData(identifier)
+}
+
+export function getOptionalDependencyVersionState(identifier) {
+    const dependency = getOptionalDependencyData(identifier)
+    const config = getOptionalDependencyConfig(identifier)
+    const requiredVersion = config?.version
+    const detectedVersion = dependency?.version
+
+    if (!requiredVersion || !detectedVersion) return 'unknown'
+    return compareDependencyVersion(requiredVersion, detectedVersion)
+}
+
+export function isOptionalDependencyPresent(identifier) {
+    return Boolean(getOptionalDependencyData(identifier))
+}
+
+export function refreshAscendantTechnologyCompatibilityState() {
+    const ascendantTechnology = getOptionalDependencyData(ascendantTechnologyID)
+    isAscendantTechnologyPresent = Boolean(ascendantTechnology)
+    ascendantTechnologyVersion = ascendantTechnology?.version ?? null
+    return ascendantTechnology ?? null
+}
+
+function notifyOptionalDependencies() {
+    const optionalDependencies = addonData.optionalDependencies ?? {}
+
+    for (const [identifier, config] of Object.entries(optionalDependencies)) {
+        const dependency = getOptionalDependencyData(identifier)
+        if (!dependency) continue
+
+        const detectedMessage = config?.detectedMessage
+        if (detectedMessage) {
+            world.sendMessage(detectedMessage)
+        }
+
+        const versionState = getOptionalDependencyVersionState(identifier)
+        if (versionState !== 'outdated') continue
+
+        const requiredVersion = config?.version ?? 'unknown'
+        const detectedVersion = dependency.version ?? 'unknown'
+        const dependencyName = config?.name ?? dependency.name ?? identifier
+        world.sendMessage(`§eOptional dependency ${dependencyName} is outdated. Requires: §f${requiredVersion}§e, found: §f${detectedVersion}§e.`)
+        if (config?.warning) {
+            world.sendMessage(`§7${config.warning}§r`)
+        }
+    }
+}
+
+world.afterEvents.worldLoad.subscribe(() => {
+    system.runTimeout(() => {
+        refreshAscendantTechnologyCompatibilityState()
+        notifyOptionalDependencies()
+    }, 340)
+})
