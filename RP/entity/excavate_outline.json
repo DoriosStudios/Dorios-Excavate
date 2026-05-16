@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "dorios:excavate_outline",
+      "materials": {
+        "default": "excavate_outline"
+      },
+      "textures": {
+        "default": "textures/entity/excavate_outline"
+      },
+      "geometry": {
+        "default": "geometry.dorios_excavate_outline"
+      },
+      "render_controllers": [
+        "controller.render.dorios_excavate_outline"
+      ]
+    }
+  }
+}

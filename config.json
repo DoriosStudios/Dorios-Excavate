@@ -18,7 +18,8 @@
 	},
 	"bdsProject": true,
 	"packs": {
-		"behaviorPack": "./BP"
+		"behaviorPack": "./BP",
+		"resourcePack": "./RP"
 	},
 	"worlds": [
 		"./worlds/*"

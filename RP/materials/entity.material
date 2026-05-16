@@ -1,0 +1,18 @@
+{
+  "materials": {
+    "version": "1.0.0",
+    "excavate_outline:entity_alphatest": {
+      "+states": [
+        "Blending",
+        "DisableDepthWrite"
+      ],
+      "+defines": [
+        "USE_EMISSIVE"
+      ],
+      "-defines": [
+        "FANCY"
+      ],
+      "depthFunc": "Always"
+    }
+  }
+}

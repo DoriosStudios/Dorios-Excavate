@@ -1,0 +1,53 @@
+{
+	"format_version": 2,
+	"metadata": {
+		"product_type": "addon",
+		"authors": [
+			"Dorios Studios"
+		],
+		"generated_with": {
+			"bridge": [
+				"2.7.54"
+			],
+			"dash": [
+				"0.11.7"
+			]
+		}
+	},
+	"header": {
+		"name": "Dorios' Excavate",
+		"description": "v1.2.1 - Dorios Studios",
+		"min_engine_version": [
+			1,
+			21,
+			90
+		],
+		"uuid": "bfc6b3fe-0522-4c1f-828f-9085cd2a3914",
+		"version": [
+			1,
+			0,
+			0
+		]
+	},
+	"modules": [
+		{
+			"type": "resources",
+			"uuid": "0982ea20-d28c-48b5-8812-3f3476bf7daa",
+			"version": [
+				1,
+				0,
+				0
+			]
+		}
+	],
+	"dependencies": [
+		{
+			"uuid": "1d270d44-b64f-4d43-8149-63a9fc128155",
+			"version": [
+				1,
+				1,
+				1
+			]
+		}
+	]
+}
